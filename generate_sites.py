@@ -2,6 +2,7 @@ import os
 import csv
 import requests
 from jinja2 import Template
+import time
 
 # Environment variables from GitHub secrets
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
@@ -17,9 +18,9 @@ NICHES_CSV = "niches.csv"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-def fetch_products(keyword):
-    """Fetch product details from the RapidAPI Amazon API."""
-    url = f"https://{RAPIDAPI_HOST}/api/product"
+def search_products(keyword):
+    """Step 1: Search Amazon for a keyword and return ASINs."""
+    url = f"https://{RAPIDAPI_HOST}/api/search"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": RAPIDAPI_HOST,
@@ -30,19 +31,52 @@ def fetch_products(keyword):
         response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-
-        # API returns products in different formats depending on the endpoint
-        products = data.get("result", []) or data.get("products", [])
-        if not products:
-            raise ValueError("No products returned from API")
-
-        return products[:10]  # top 10 products
-
+        results = data.get("result", []) or data.get("products", [])
+        asins = [item.get("asin") for item in results if "asin" in item]
+        return asins[:5]  # only need first 5
     except Exception as e:
-        print(f"❌ API fetch failed for {keyword}: {e}")
+        print(f"❌ Search failed for {keyword}: {e}")
+        return []
 
-        # Fallback demo data (for display even if API fails)
-        fallback = [
+
+def fetch_product_details(asin):
+    """Step 2: Fetch detailed product info using ASIN."""
+    url = f"https://{RAPIDAPI_HOST}/api/product/{asin}"
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": RAPIDAPI_HOST,
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        product = data.get("result", {}) or data
+        return {
+            "title": product.get("title", "Unknown Product"),
+            "price": product.get("price_string", "$--"),
+            "image": product.get("main_image", "https://via.placeholder.com/300x300?text=No+Image"),
+            "url": product.get("url", "#"),
+        }
+    except Exception as e:
+        print(f"❌ Details fetch failed for {asin}: {e}")
+        return None
+
+
+def fetch_products(keyword):
+    """Combine search + detail fetching, with fallback if API fails."""
+    asins = search_products(keyword)
+    products = []
+
+    for asin in asins:
+        product = fetch_product_details(asin)
+        if product:
+            products.append(product)
+        time.sleep(1.5)  # small delay to avoid rate limits
+
+    if not products:
+        # fallback demo products
+        products = [
             {
                 "title": f"Sample {keyword.title()} Product 1",
                 "price": "$49.99",
@@ -62,7 +96,7 @@ def fetch_products(keyword):
                 "url": "#",
             },
         ]
-        return fallback
+    return products
 
 
 def generate_page(niche, products):
@@ -87,7 +121,7 @@ def main():
 
     with open(NICHES_CSV, newline="", encoding="utf-8") as csvfile:
         reader = csv.reader(csvfile)
-        next(reader, None)  # skip header if present
+        next(reader, None)
         for row in reader:
             if not row:
                 continue
