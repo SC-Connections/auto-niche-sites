@@ -1,35 +1,88 @@
-name: Build & Deploy Niche Sites
+import os
+import csv
+import requests
+import subprocess
+from jinja2 import Template
 
-on:
-  workflow_dispatch:
+# --- Auto-install missing dependencies ---
+try:
+    from jinja2 import Template
+except ImportError:
+    subprocess.run(["pip", "install", "jinja2"], check=True)
+    from jinja2 import Template
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+# --- Environment variables (from GitHub secrets) ---
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon24.p.rapidapi.com")
+ASSOC_TAG = os.getenv("AMAZON_ASSOC_TAG", "")
 
-    steps:
-      - name: 🧹 Checkout repository
-        uses: actions/checkout@v4
+# --- Paths ---
+TEMPLATE_PATH = "site_template/index.html"
+OUTPUT_DIR = "dist"
+NICHES_CSV = "niches.csv"
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+# --- Ensure output directory exists ---
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-      - name: 📦 Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+def fetch_products(niche):
+    """Fetch top 10 products from the Amazon RapidAPI."""
+    url = f"https://{RAPIDAPI_HOST}/api/product"
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY or "",
+        "x-rapidapi-host": RAPIDAPI_HOST,
+    }
+    querystring = {"keyword": niche, "country": "US"}
 
-      - name: ⚙️ Generate static sites
-        env:
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
-          AMAZON_ASSOC_TAG: ${{ secrets.AMAZON_ASSOC_TAG }}
-        run: python generate_sites.py
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        items = data.get("result", []) or data.get("products", [])
+        return items[:10]
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API fetch failed for {niche}: {e}")
+        return []
 
-      - name: 🚀 Deploy to GitHub Pages (gh-pages)
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+def generate_page(niche, products):
+    """Render an HTML page for the given niche."""
+    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+        template_content = f.read()
+        template = Template(template_content)
+
+    output_html = template.render(
+        niche=niche.title().replace("-", " "),
+        products=products,
+        assoc_tag=ASSOC_TAG,
+    )
+
+    niche_dir = os.path.join(OUTPUT_DIR, niche)
+    os.makedirs(niche_dir, exist_ok=True)
+
+    with open(os.path.join(niche_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write(output_html)
+
+    print(f"✅ Page created: dist/{niche}/index.html")
+
+def main():
+    print("⚙️ Starting site generation...")
+
+    if not os.path.exists(NICHES_CSV):
+        print("❌ niches.csv not found.")
+        return
+
+    with open(NICHES_CSV, newline="", encoding="utf-8") as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if not row:
+                continue
+            niche = row[0].strip()
+            if not niche:
+                continue
+
+            products = fetch_products(niche)
+            generate_page(niche, products)
+
+    print("🎉 All niche pages generated successfully.")
+
+if __name__ == "__main__":
+    main()
