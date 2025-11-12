@@ -6,7 +6,7 @@ env/
 venv/
 
 # Build
-dist/
+# dist
 .cache/
 
 # Mac/Editor
