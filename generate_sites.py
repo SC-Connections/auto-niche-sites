@@ -3,47 +3,54 @@ import csv
 import requests
 from jinja2 import Template
 
-# Environment variables (loaded from GitHub secrets)
+# Environment variables from GitHub secrets
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon-real-time-api.p.rapidapi.com")
 ASSOC_TAG = os.getenv("AMAZON_ASSOC_TAG", "")
 
-# Paths
+# Template paths
 TEMPLATE_PATH = "site_template/index.html"
 OUTPUT_DIR = "dist"
 NICHES_CSV = "niches.csv"
 
+# Ensure output folder exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def fetch_products(keyword):
-    """Fetch product data from the Amazon Real Time API Product Search endpoint."""
+    """Fetch product details from the RapidAPI Amazon API."""
     url = f"https://{RAPIDAPI_HOST}/search"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": RAPIDAPI_HOST
     }
-    params = {
-        "query": keyword,
-        "domain": "US",
-        "sort": "relevance",
-        "page": "1",
-        "pages": "1"
-    }
+    params = {"query": keyword, "domain": "US"}
 
     try:
         response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        products = data.get("data", [])
+
+        # Handle different possible response structures
+        products = None
+        if isinstance(data, dict):
+            if isinstance(data.get("data"), list):
+                products = data["data"]
+            elif isinstance(data.get("data"), dict) and "products" in data["data"]:
+                products = data["data"]["products"]
+
         if not products:
-            print(f"⚠️ No products found for '{keyword}'")
+            print(f"⚠️ Unexpected response for {keyword}: {data.keys() if isinstance(data, dict) else type(data)}")
+            return []
+
+        # Return top 10 products
         return products[:10]
+
     except Exception as e:
         print(f"❌ API fetch failed for {keyword}: {e}")
         return []
 
 def generate_page(niche, products):
-    """Render HTML page for a niche."""
+    """Render and save an HTML page for a specific niche."""
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         template = Template(f.read())
 
@@ -63,7 +70,7 @@ def main():
 
     with open(NICHES_CSV, newline="", encoding="utf-8") as csvfile:
         reader = csv.reader(csvfile)
-        next(reader, None)  # Skip header
+        next(reader, None)  # skip header if present
         for row in reader:
             if not row:
                 continue
