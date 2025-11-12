@@ -1,100 +1,92 @@
 import os
 import csv
 import requests
+from pathlib import Path
+from jinja2 import Template
 
-# Environment variables from GitHub secrets
+# Environment variables (from GitHub secrets)
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon24.p.rapidapi.com")
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "real-time-amazon-data.p.rapidapi.com")
 ASSOC_TAG = os.getenv("AMAZON_ASSOC_TAG", "")
 
-# Template paths
+# Template and paths
 TEMPLATE_PATH = "site_template/index.html"
-OUTPUT_DIR = "dist"
+OUTPUT_DIR = Path("dist")
 NICHES_CSV = "niches.csv"
 
-# Ensure dist folder exists
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
+OUTPUT_DIR.mkdir(exist_ok=True)
 
 def fetch_products(niche):
-    """Fetch products from the Amazon API (via RapidAPI)."""
-    url = f"https://{RAPIDAPI_HOST}/api/product"
+    """Fetch top products from RapidAPI (real-time-amazon-data)."""
+    url = f"https://{RAPIDAPI_HOST}/search"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": RAPIDAPI_HOST,
     }
-    querystring = {"keyword": niche, "country": "US"}
+    params = {"query": niche, "page": "1", "country": "US"}
 
     try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        # The API returns product results in different formats depending on endpoint
-        items = data.get("result", []) or data.get("products", [])
-        return items[:10]  # top 10
+
+        items = data.get("data", {}).get("products", [])
+        return items[:10]
     except Exception as e:
         print(f"❌ API fetch failed for {niche}: {e}")
         return []
 
-
-def build_product_cards(products):
-    """Convert product list to HTML card grid."""
-    cards = ""
+def make_product_cards(products):
+    """Convert product data into HTML cards."""
+    cards = []
     for p in products:
-        title = p.get("title") or p.get("name") or "Unknown Product"
-        image = p.get("image") or p.get("thumbnail") or ""
-        link = p.get("url") or p.get("link") or "#"
-        price = p.get("price") or p.get("current_price") or ""
-        cards += f"""
-        <div class="card">
-            <img src="{image}" alt="{title}" loading="lazy"/>
-            <h3>{title}</h3>
-            <p>{price}</p>
-            <a href="{link}?tag={ASSOC_TAG}" target="_blank">View on Amazon</a>
-        </div>
+        title = p.get("title", "No title")
+        image = p.get("main_image", "")
+        price = p.get("price_str", "N/A")
+        url = p.get("product_url", "#")
+
+        card = f"""
+        <article class="card">
+            <img src="{image}" alt="{title}">
+            <h2>{title}</h2>
+            <p class="price">{price}</p>
+            <a href="{url}?tag={ASSOC_TAG}" target="_blank">View on Amazon</a>
+        </article>
         """
-    return cards
+        cards.append(card)
+    return "\n".join(cards)
 
-
-def generate_site(niche):
-    """Build one niche page and save it under /dist/niche/index.html."""
-    products = fetch_products(niche)
-    cards_html = build_product_cards(products)
+def generate_site(niche, title, description):
+    """Generate HTML page for one niche."""
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
-        template = f.read()
+        template_html = f.read()
+
+    products = fetch_products(niche)
+    cards_html = make_product_cards(products)
+
     html = (
-        template.replace("{{ niche }}", niche.title())
-        .replace("{{ products }}", cards_html or "<p>No products found.</p>")
+        template_html.replace("{{TITLE}}", title)
+        .replace("{{DESCRIPTION}}", description)
+        .replace("{{H1}}", title)
+        .replace("{{PRODUCT_CARDS}}", cards_html or "<p>No products found.</p>")
     )
 
-    niche_dir = os.path.join(OUTPUT_DIR, niche.replace(" ", "-").lower())
-    os.makedirs(niche_dir, exist_ok=True)
+    output_path = OUTPUT_DIR / niche / "index.html"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8")
 
-    output_path = os.path.join(niche_dir, "index.html")
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html)
     print(f"✅ Page created: {output_path}")
 
-
 def main():
-    """Generate static sites for all niches in the CSV."""
-    if not RAPIDAPI_KEY:
-        print("❌ Missing RAPIDAPI_KEY environment variable.")
-        return
-
-    if not os.path.exists(NICHES_CSV):
-        print("❌ niches.csv not found.")
-        return
-
-    with open(NICHES_CSV, newline="", encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
+    print("⚙️ Starting site generation...")
+    with open(NICHES_CSV, newline='', encoding="utf-8") as csvfile:
+        reader = csv.DictReader(csvfile)
         for row in reader:
-            if row:
-                niche = row[0].strip()
-                generate_site(niche)
-
+            niche = row["niche"]
+            title = row.get("title", niche.title())
+            description = row.get("description", f"Top {title} available on Amazon.")
+            generate_site(niche, title, description)
+    print("🎉 All niche pages generated successfully.")
 
 if __name__ == "__main__":
-    print("⚙️ Starting site generation...")
     main()
-    print("🎉 All niche pages generated successfully.")
