@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+
+# Build
+dist/
+.cache/
+
+# Mac/Editor
+.DS_Store
+.idea/
+.vscode/
