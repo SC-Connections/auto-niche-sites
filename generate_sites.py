@@ -1,92 +1,106 @@
 import os
 import csv
 import requests
+import subprocess
 from jinja2 import Template
 
-# Environment variables from GitHub secrets
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "amazon-real-time-api.p.rapidapi.com")
-ASSOC_TAG = os.getenv("AMAZON_ASSOC_TAG", "")
-
-# Template paths
-TEMPLATE_PATH = "site_template/index.html"
+# --- Configuration ---
+API_URL = "https://amazon-real-time-api.p.rapidapi.com/search"
+API_KEY = os.getenv("RAPIDAPI_KEY")  # Stored in GitHub Secrets
+HEADERS = {
+    "x-rapidapi-host": "amazon-real-time-api.p.rapidapi.com",
+    "x-rapidapi-key": API_KEY or "MISSING_KEY"
+}
 OUTPUT_DIR = "dist"
-NICHES_CSV = "niches.csv"
+TEMPLATE_PATH = "site_template/index.html"
 
-# Ensure output folder exists
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# --- Load Jinja2 template ---
+def load_template():
+    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+        return Template(f.read())
 
-def fetch_products(keyword):
-    """Fetch product details from the Amazon Real Time API."""
-    url = f"https://{RAPIDAPI_HOST}/search"
-    headers = {
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": RAPIDAPI_HOST
-    }
+# --- Fetch products from API ---
+def fetch_products(keyword, country="US", max_items=10):
     params = {
         "query": keyword,
-        "domain": "US",
+        "domain": country,
         "sort": "relevance",
         "page": 1,
         "pages": 1
     }
 
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
+        response = requests.get(API_URL, headers=HEADERS, params=params, timeout=20)
         response.raise_for_status()
-        data = response.json()
+        result = response.json()
 
-        # Check structure of response
-        if "data" in data and isinstance(data["data"], list):
-            products = data["data"]
-        elif "data" in data and isinstance(data["data"], dict) and "products" in data["data"]:
-            products = data["data"]["products"]
+        # ✅ Handle new wrapped API structure
+        if isinstance(result, dict):
+            if "data" in result:
+                data = result["data"]
+                if isinstance(data, dict) and "products" in data:
+                    products = data["products"]
+                elif isinstance(data, list):
+                    products = data
+                else:
+                    print(f"⚠️ Unexpected 'data' format for {keyword}: type={type(data)}")
+                    products = []
+            elif "success" in result and "metadata" in result:
+                # Some APIs wrap results differently — log keys to debug
+                print(f"⚠️ Unexpected response for {keyword}: {list(result.keys())}")
+                products = []
+            else:
+                print(f"⚠️ No 'data' key found in response for {keyword}")
+                products = []
         else:
-            print(f"⚠️ Unexpected response for {keyword}: {list(data.keys())}")
-            return []
+            print(f"⚠️ Non-dict API response for {keyword}")
+            products = []
 
-        # Limit to top 10 results
-        return products[:10]
+        # Trim items if available
+        return products[:max_items] if products else []
 
-    except requests.exceptions.HTTPError as e:
-        print(f"❌ API fetch failed for {keyword}: {e}")
     except Exception as e:
-        print(f"❌ Error for {keyword}: {e}")
-    return []
+        print(f"❌ API fetch failed for {keyword}: {e}")
+        return []
 
+# --- Generate static site for each niche ---
+def generate_site(keyword, products):
+    os.makedirs(f"{OUTPUT_DIR}/{keyword}", exist_ok=True)
+    template = load_template()
 
-def generate_page(niche, products):
-    """Render and save an HTML page for a specific niche."""
-    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
-        template = Template(f.read())
+    html = template.render(
+        title=f"{keyword.capitalize()} - Amazon Niche Products",
+        keyword=keyword,
+        products=products
+    )
 
-    html = template.render(niche=niche, products=products, assoc_tag=ASSOC_TAG)
-
-    niche_dir = os.path.join(OUTPUT_DIR, niche.replace(" ", "-").lower())
-    os.makedirs(niche_dir, exist_ok=True)
-    output_path = os.path.join(niche_dir, "index.html")
-
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(f"{OUTPUT_DIR}/{keyword}/index.html", "w", encoding="utf-8") as f:
         f.write(html)
+    print(f"✅ Page created: {OUTPUT_DIR}/{keyword}/index.html")
 
-    print(f"✅ Page created: {output_path}")
-
-
+# --- Main build function ---
 def main():
     print("⚙️ Starting site generation...")
 
-    with open(NICHES_CSV, newline="", encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
-        next(reader, None)  # skip header if present
+    with open("niches.csv", newline="", encoding="utf-8") as csvfile:
+        reader = csv.DictReader(csvfile)
         for row in reader:
-            if not row:
+            keyword = row["keyword"].strip()
+            if not keyword:
                 continue
-            niche = row[0].strip()
-            products = fetch_products(niche)
-            generate_page(niche, products)
+            products = fetch_products(keyword)
+            generate_site(keyword, products)
 
     print("🎉 All niche pages generated successfully.")
 
+    # Deploy to gh-pages
+    try:
+        subprocess.run(["git", "add", OUTPUT_DIR], check=True)
+        subprocess.run(["git", "commit", "-m", "Update generated niche pages"], check=False)
+        subprocess.run(["git", "push", "origin", "gh-pages"], check=True)
+        print("🚀 Deployment complete.")
+    except Exception as e:
+        print(f"⚠️ Deployment skipped: {e}")
 
 if __name__ == "__main__":
     main()
