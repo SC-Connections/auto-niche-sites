@@ -17,37 +17,43 @@ NICHES_CSV = "niches.csv"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def fetch_products(keyword):
-    """Fetch product details from the RapidAPI Amazon API."""
+    """Fetch product details from the Amazon Real Time API."""
     url = f"https://{RAPIDAPI_HOST}/search"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": RAPIDAPI_HOST
     }
-    params = {"query": keyword, "domain": "US"}
+    params = {
+        "query": keyword,
+        "domain": "US",
+        "sort": "relevance",
+        "page": 1,
+        "pages": 1
+    }
 
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
 
-        # Handle different possible response structures
-        products = None
-        if isinstance(data, dict):
-            if isinstance(data.get("data"), list):
-                products = data["data"]
-            elif isinstance(data.get("data"), dict) and "products" in data["data"]:
-                products = data["data"]["products"]
-
-        if not products:
-            print(f"⚠️ Unexpected response for {keyword}: {data.keys() if isinstance(data, dict) else type(data)}")
+        # Check structure of response
+        if "data" in data and isinstance(data["data"], list):
+            products = data["data"]
+        elif "data" in data and isinstance(data["data"], dict) and "products" in data["data"]:
+            products = data["data"]["products"]
+        else:
+            print(f"⚠️ Unexpected response for {keyword}: {list(data.keys())}")
             return []
 
-        # Return top 10 products
+        # Limit to top 10 results
         return products[:10]
 
-    except Exception as e:
+    except requests.exceptions.HTTPError as e:
         print(f"❌ API fetch failed for {keyword}: {e}")
-        return []
+    except Exception as e:
+        print(f"❌ Error for {keyword}: {e}")
+    return []
+
 
 def generate_page(niche, products):
     """Render and save an HTML page for a specific niche."""
@@ -65,6 +71,7 @@ def generate_page(niche, products):
 
     print(f"✅ Page created: {output_path}")
 
+
 def main():
     print("⚙️ Starting site generation...")
 
@@ -79,6 +86,7 @@ def main():
             generate_page(niche, products)
 
     print("🎉 All niche pages generated successfully.")
+
 
 if __name__ == "__main__":
     main()
