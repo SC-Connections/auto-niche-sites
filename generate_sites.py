@@ -1,119 +1,101 @@
-import csv
 import os
-import json
+import csv
 import requests
 from jinja2 import Environment, FileSystemLoader
 
-# -------------------------------
-# Environment variables (from GitHub Secrets)
-# -------------------------------
+# === CONFIGURATION ===
+OUTPUT_DIR = "dist"
+TEMPLATE_DIR = "site_template"
+HTML_TEMPLATE = "index.html"
+
+# RapidAPI setup
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")
-AMAZON_ASSOC_TAG = os.getenv("AMAZON_ASSOC_TAG", "scconnections-20")
+ASSOC_TAG = os.getenv("AMAZON_ASSOC_TAG")
 
-# -------------------------------
-# API fetch function
-# -------------------------------
-def fetch_amazon_data(keyword):
-    """Fetch product data from Amazon Real Time API (via RapidAPI)."""
-    url = "https://amazon-real-time-api.p.rapidapi.com/dealsByCategory"
+if not RAPIDAPI_KEY or not RAPIDAPI_HOST or not ASSOC_TAG:
+    raise EnvironmentError("Missing required environment variables: RAPIDAPI_KEY, RAPIDAPI_HOST, AMAZON_ASSOC_TAG")
 
+# === HELPERS ===
+
+def fetch_products(keyword):
+    """Fetch product data from RapidAPI for a given keyword."""
+    url = f"https://{RAPIDAPI_HOST}/searchProducts"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-host": RAPIDAPI_HOST
     }
-    params = {"category": keyword, "country": "US"}
+    params = {
+        "query": keyword,
+        "country": "US",
+        "page": 1
+    }
 
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
+        print(f"🔍 Fetching data for '{keyword}'...")
+        response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         data = response.json()
 
-        # ✅ Handle the RapidAPI response format
-        if isinstance(data, dict):
-            if "deals" in data and isinstance(data["deals"], list):
-                return data["deals"]
-            elif "products" in data and isinstance(data["products"], list):
-                return data["products"]
-            else:
-                print(f"⚠️ Unexpected 'data' format for {keyword}: type={type(data)} keys={list(data.keys())}")
-                return []
-        elif isinstance(data, list):
-            return data
-        else:
-            print(f"⚠️ Unknown data type for {keyword}: {type(data)}")
+        # Normalize results depending on API shape
+        items = data.get("data") or data.get("products") or []
+        if not items:
+            print(f"⚠️ No products found for '{keyword}'.")
             return []
 
-    except Exception as e:
+        products = []
+        for item in items[:10]:  # limit to top 10 for simplicity
+            products.append({
+                "title": item.get("title", "Unknown Product"),
+                "url": item.get("url", "#"),
+                "price": item.get("price", "N/A"),
+                "image": item.get("image", ""),
+            })
+        return products
+
+    except requests.exceptions.RequestException as e:
         print(f"❌ Error fetching data for {keyword}: {e}")
         return []
 
-# -------------------------------
-# HTML generation function
-# -------------------------------
-def generate_page(env, keyword, products):
-    """Render HTML page for a niche keyword."""
-    template = env.get_template("index.html")
 
-    # Define the output directory for each niche
-    output_dir = os.path.join("dist", keyword)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Render template
-    html_content = template.render(
-        keyword=keyword,
+def generate_site(niche, products):
+    """Render and save an HTML page for a niche."""
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    template = env.get_template(HTML_TEMPLATE)
+    output_html = template.render(
+        niche=niche.title().replace("-", " "),
         products=products,
-        amazon_tag=AMAZON_ASSOC_TAG,
+        amazon_tag=ASSOC_TAG
     )
 
-    # Save the file
-    output_path = os.path.join(output_dir, "index.html")
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    niche_dir = os.path.join(OUTPUT_DIR, niche)
+    os.makedirs(niche_dir, exist_ok=True)
+    with open(os.path.join(niche_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write(output_html)
+    print(f"✅ Page created: {niche_dir}/index.html")
 
-    print(f"✅ Page created: {output_path}")
 
-# -------------------------------
-# Main build logic
-# -------------------------------
-def main():
+def read_niches(csv_file="niches.csv"):
+    """Read niche list from CSV."""
+    niches = []
+    with open(csv_file, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if "keyword" not in reader.fieldnames:
+            raise ValueError("CSV file must contain a 'keyword' column.")
+        for row in reader:
+            niche = row["keyword"].strip().lower()
+            if niche:
+                niches.append(niche)
+    return niches
+
+
+# === MAIN ===
+if __name__ == "__main__":
     print("⚙️ Starting site generation...")
 
-    # Initialize Jinja2 environment
-    env = Environment(loader=FileSystemLoader("site_template"))
-
-    # Ensure niches.csv exists
-    if not os.path.exists("niches.csv"):
-        print("❌ niches.csv not found.")
-        return
-
-    with open("niches.csv", "r", encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        headers = reader.fieldnames or []
-
-        # Check for proper column
-        if "keyword" not in headers and "niche" not in headers:
-            print("⚠️ CSV missing 'keyword' or 'niche' column — check file header.")
-            return
-
-        for row in reader:
-            keyword = (row.get("keyword") or row.get("niche") or "").strip()
-            if not keyword:
-                continue
-
-            print(f"🔍 Fetching data for '{keyword}'...")
-            products = fetch_amazon_data(keyword)
-
-            if not products:
-                print(f"⚠️ No products found for '{keyword}'. Skipping.")
-                continue
-
-            generate_page(env, keyword, products)
+    niches = read_niches()
+    for niche in niches:
+        products = fetch_products(niche)
+        generate_site(niche, products)
 
     print("🎉 All niche pages generated successfully.")
-
-# -------------------------------
-# Run script
-# -------------------------------
-if __name__ == "__main__":
-    main()
