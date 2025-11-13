@@ -2,10 +2,14 @@ name: 🧠 Auto Generate & Deploy Niche Sites
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: 🧹 Checkout repository
         uses: actions/checkout@v4
@@ -13,32 +17,29 @@ jobs:
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests jinja2 pandas
+          pip install requests jinja2
 
       - name: ⚙️ Generate niche sites (one repo per niche)
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python generate_sites.py
 
       - name: 🔧 Configure Git identity
         run: |
-          git config --global user.name "SC-Connections"
-          git config --global user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: ✅ Verify build output
-        run: |
-          echo "Generated content:"
-          ls -R dist || echo "No dist directory found"
+        run: ls -R dist || echo "No dist folder found"
 
-      - name: 🚀 Deploy master repo (optional)
-        if: success()
+      - name: 🚀 Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
