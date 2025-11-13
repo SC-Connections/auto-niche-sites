@@ -173,6 +173,79 @@ def generate_site(niche: str):
     
     print(f"✅ Generated site for '{niche}' at {niche_dir}")
 
+def generate_index_page(niches):
+    """Generate navigation index page."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Niche Sites Directory</title>
+  <style>
+    :root { --max: 800px; }
+    * { box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+      color: #0f172a; 
+      background: #f8fafc; 
+      padding: 40px 20px;
+    }
+    .wrap { max-width: var(--max); margin: 0 auto; }
+    h1 { font-size: 36px; margin-bottom: 10px; }
+    p { color: #475569; margin-bottom: 30px; }
+    ul { list-style: none; padding: 0; }
+    li { margin: 10px 0; }
+    a { 
+      display: block;
+      padding: 15px 20px; 
+      background: white; 
+      border-radius: 12px; 
+      text-decoration: none; 
+      color: #1e293b;
+      font-weight: 600;
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+      transition: all 0.2s;
+    }
+    a:hover { 
+      background: #1e293b; 
+      color: white; 
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0,0,0,.1);
+    }
+    footer { 
+      color: #475569; 
+      font-size: 14px; 
+      text-align: center; 
+      margin-top: 50px; 
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎯 Niche Sites Directory</h1>
+    <p>Browse our curated collection of niche product sites:</p>
+    <ul>
+"""
+    
+    # Add links for each niche
+    for niche in niches:
+        niche_slug = slugify(niche)
+        niche_title = niche.title()
+        html += f'      <li><a href="{niche_slug}/">{niche_title}</a></li>\n'
+    
+    html += """    </ul>
+    <footer>© 2025 SC Connections — Amazon Associate</footer>
+  </div>
+</body>
+</html>
+"""
+    
+    with open(OUTPUT_DIR / "index.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    
+    print(f"✅ Generated navigation index at {OUTPUT_DIR}/index.html")
+
 def main():
     print("⚙️ Starting site generation process...")
     
@@ -182,6 +255,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     
     # Read niches from CSV
+    niches = []
     with open(NICHES_FILE, newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
         
@@ -196,7 +270,11 @@ def main():
         for row in reader:
             niche = row[niche_column].strip()
             if niche:
+                niches.append(niche)
                 generate_site(niche)
+    
+    # Generate navigation index
+    generate_index_page(niches)
     
     print(f"🎉 All sites generated! Check the {OUTPUT_DIR} directory.")
 
