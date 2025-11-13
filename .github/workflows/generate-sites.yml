@@ -1,10 +1,12 @@
-name: Build & Deploy Niche Sites
+name: 🧠 Auto Generate & Deploy Niche Sites
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * 1"   # runs every Monday at 9 AM
 
 jobs:
   build-and-deploy:
@@ -12,32 +14,39 @@ jobs:
 
     steps:
       - name: 🧹 Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: 📦 Install dependencies
         run: |
-          pip install requests jinja2
+          pip install requests
 
-      - name: ⚙️ Generate static sites
+      - name: ⚙️ Generate niche sites (one repo per niche)
         run: python generate_sites.py
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
-          AMAZON_ASSOC_TAG: ${{ secrets.AMAZON_ASSOC_TAG }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          AMAZON_ASSOC_TAG: scconnec0d-20
 
-      # 🆕 Step added here
       - name: 🔧 Configure Git identity
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 🚀 Deploy to GitHub Pages (gh-pages)
+      - name: ✅ Verify build output
+        run: |
+          echo "Checking generated folders..."
+          ls -l dist || echo "No dist folder found"
+
+      - name: 🚀 Deploy master repo (optional)
+        if: success()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+          publish_branch: gh-pages
+
