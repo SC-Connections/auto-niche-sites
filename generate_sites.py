@@ -1,110 +1,132 @@
-import os, csv, requests, json, time, re, subprocess
+import os
+import csv
+import json
+import time
+import requests
+import subprocess
+from jinja2 import Environment, FileSystemLoader
 
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = "real-time-amazon-data.p.rapidapi.com"
+RAPIDAPI_HOST = "amazon-real-time-api.p.rapidapi.com"
 GITHUB_TOKEN = os.getenv("GH_TOKEN")
+USERNAME = "SC-Connections"
 
-HEADERS = {
-    "x-rapidapi-key": RAPIDAPI_KEY,
-    "x-rapidapi-host": RAPIDAPI_HOST
-}
+# Each niche will create its own repo, e.g., bluetooth-earbuds -> auto-bluetooth-earbuds
+BASE_REPO_PREFIX = "auto-"
 
-API_BASE = f"https://{RAPIDAPI_HOST}"
+TEMPLATE_DIR = "site_template"
+DIST_DIR = "dist"
 
-def clean_slug(name):
-    return re.sub(r'[^a-z0-9-]+', '-', name.lower()).strip('-')
+# Ensure directories exist
+os.makedirs(DIST_DIR, exist_ok=True)
 
-def safe_request(url, params):
-    for attempt in range(3):
-        try:
-            r = requests.get(url, headers=HEADERS, params=params, timeout=30)
-            r.raise_for_status()
-            time.sleep(0.25)  # stay under 5 requests/sec
-            return r.json().get("data", [])
-        except requests.exceptions.HTTPError as e:
-            if r.status_code == 429:
-                print("Rate limit hit. Waiting 3s...")
-                time.sleep(3)
-            elif r.status_code == 403:
-                print("403 Forbidden: Check RapidAPI key or subscription.")
-                raise
-            else:
-                print(f"HTTP error {r.status_code}: {r.text}")
-                time.sleep(2)
-        except Exception as e:
-            print("Retry after error:", e)
-            time.sleep(2)
-    return []
+# Load template
+env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+template = env.get_template("index.html")
 
-def fetch_search(niche):
-    print(f"🔍 Searching for: {niche}")
-    url = f"{API_BASE}/search"
-    params = {"query": niche, "sort_by": "BEST_SELLERS", "country": "US", "page": 1}
-    return [p["asin"] for p in safe_request(url, params)[:10]]
+def fetch_amazon_deals(keyword):
+    """Fetch deals for a keyword from RapidAPI."""
+    url = "https://amazon-real-time-api.p.rapidapi.com/deals"
+    querystring = {"domain": "US", "node_id": "16310101"}
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": RAPIDAPI_HOST
+    }
 
-def fetch_details(asin):
-    url = f"{API_BASE}/product-details"
-    params = {"asin": asin, "country": "US"}
-    return safe_request(url, params)
+    print(f"🔍 Fetching deals for '{keyword}'...")
+    try:
+        response = requests.get(url, headers=headers, params=querystring, timeout=15)
+        if response.status_code != 200:
+            print(f"❌ API error {response.status_code}: {response.text}")
+            return []
 
-def fetch_reviews(asin):
-    url = f"{API_BASE}/product-reviews"
-    params = {"asin": asin, "country": "US", "page": 1, "sort_by": "TOP_REVIEWS"}
-    return safe_request(url, params)
+        data = response.json()
+        # Each deal has title, url, image, price, etc.
+        items = data.get("data", [])
+        print(f"✅ Retrieved {len(items)} deals for {keyword}")
+        return items
 
-def build_html(niche, products):
-    html = f"<html><head><title>Top 10 {niche.title()}</title></head><body><h1>Top 10 {niche.title()}</h1>"
-    for p in products:
-        title = p.get("title", "No title")
-        img = (p.get("main_image") or {}).get("link", "")
-        price = p.get("product_price", "N/A")
-        rating = p.get("product_star_rating", "N/A")
-        url = p.get("product_url", "#")
-        reviews = p.get("reviews", [])
-        review_html = "".join(f"<p>⭐ {r.get('rating','')} – {r.get('review_text','')[:120]}...</p>" for r in reviews[:2])
-        html += f"<div><img src='{img}' width='200'/><h2>{title}</h2><p>💲{price} | ⭐ {rating}</p>{review_html}<a href='{url}?tag=scconnec0d-20'>Buy on Amazon</a></div><hr>"
-    html += "</body></html>"
-    out_dir = f"dist/{clean_slug(niche)}"
-    os.makedirs(out_dir, exist_ok=True)
-    with open(f"{out_dir}/index.html", "w", encoding="utf-8") as f:
-        f.write(html)
-    return out_dir
+    except Exception as e:
+        print(f"❌ Error fetching data for {keyword}: {e}")
+        return []
 
-def create_repo_and_push(niche, out_dir):
-    repo_name = f"auto-niche-{clean_slug(niche)}"
-    print(f"📦 Creating repo {repo_name}...")
-    r = requests.post(
-        "https://api.github.com/user/repos",
-        headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"},
-        json={"name": repo_name, "private": False}
-    )
-    if r.status_code not in (200,201):
-        print(f"GitHub repo creation failed: {r.text}")
+def create_github_repo(niche):
+    """Create or update a GitHub repository for this niche."""
+    repo_name = f"{BASE_REPO_PREFIX}{niche}"
+    url = f"https://api.github.com/user/repos"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    data = {"name": repo_name, "private": False, "auto_init": True, "description": f"Auto niche site for {niche}"}
+    print(f"🛠️ Creating/updating repo {repo_name}...")
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 201:
+            print(f"✅ Repo {repo_name} created successfully.")
+        elif response.status_code == 422:
+            print(f"ℹ️ Repo {repo_name} already exists, skipping creation.")
+        else:
+            print(f"⚠️ Repo creation error: {response.text}")
+    except Exception as e:
+        print(f"❌ Failed to create repo for {niche}: {e}")
+
+    return repo_name
+
+def generate_site(niche, products):
+    """Generate static HTML site for a given niche."""
+    if not products:
+        print(f"⚠️ No data for {niche}, skipping.")
         return
-    subprocess.run(["git", "init"], cwd=out_dir)
-    subprocess.run(["git", "branch", "-M", "main"], cwd=out_dir)
-    subprocess.run(["git", "remote", "add", "origin", f"https://x-access-token:{GITHUB_TOKEN}@github.com/SC-Connections/{repo_name}.git"], cwd=out_dir)
-    subprocess.run(["git", "add", "."], cwd=out_dir)
-    subprocess.run(["git", "commit", "-m", "Initial niche deploy"], cwd=out_dir)
-    subprocess.run(["git", "push", "-u", "origin", "main"], cwd=out_dir)
+
+    niche_dir = os.path.join(DIST_DIR, niche)
+    os.makedirs(niche_dir, exist_ok=True)
+
+    output = template.render(niche=niche, products=products)
+    with open(os.path.join(niche_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write(output)
+
+    print(f"✅ Site generated for {niche} → {niche_dir}/index.html")
 
 def main():
-    with open("niches.csv") as f:
-        niches = [row[0].strip() for row in csv.reader(f) if row]
-    for niche in niches:
-        try:
-            asins = fetch_search(niche)
-            products = []
-            for asin in asins:
-                detail = fetch_details(asin)
-                if isinstance(detail, list):
-                    detail = detail[0] if detail else {}
-                detail["reviews"] = fetch_reviews(asin)
-                products.append(detail)
-            out_dir = build_html(niche, products)
-            create_repo_and_push(niche, out_dir)
-        except Exception as e:
-            print(f"❌ Failed for {niche}: {e}")
+    print("⚙️ Starting site generation (one repo per niche)...")
+    with open("niches.csv", newline="", encoding="utf-8") as csvfile:
+        reader = csv.DictReader(csvfile)
+        if "keyword" not in reader.fieldnames:
+            print("❌ CSV missing 'keyword' column — check file header.")
+            return
+
+        for row in reader:
+            keyword = row["keyword"].strip()
+            if not keyword:
+                continue
+
+            deals = fetch_amazon_deals(keyword)
+            generate_site(keyword, deals)
+
+            # Create repo for niche
+            repo_name = create_github_repo(keyword)
+
+            # Commit + push site to repo
+            try:
+                subprocess.run(["git", "init"], cwd=os.path.join(DIST_DIR, keyword), check=True)
+                subprocess.run(["git", "add", "."], cwd=os.path.join(DIST_DIR, keyword), check=True)
+                subprocess.run(["git", "commit", "-m", f"Deploy site for {keyword}"], cwd=os.path.join(DIST_DIR, keyword), check=True)
+                subprocess.run(["git", "branch", "-M", "main"], cwd=os.path.join(DIST_DIR, keyword), check=True)
+                subprocess.run([
+                    "git", "remote", "add", "origin",
+                    f"https://{USERNAME}:{GITHUB_TOKEN}@github.com/{USERNAME}/{repo_name}.git"
+                ], cwd=os.path.join(DIST_DIR, keyword), check=True)
+                subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=os.path.join(DIST_DIR, keyword), check=True)
+                print(f"🚀 Deployed {keyword} to https://{USERNAME}.github.io/{repo_name}/")
+            except Exception as e:
+                print(f"⚠️ Git push failed for {keyword}: {e}")
+
+            time.sleep(3)
+
+    print("🎉 All niche repos generated and deployed successfully.")
 
 if __name__ == "__main__":
     main()
