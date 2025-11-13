@@ -1,62 +1,112 @@
 import os
 import csv
+import json
 import requests
+import shutil
+import subprocess
 from jinja2 import Environment, FileSystemLoader
 
-# Constants
-BASE_URL = "https://amazon-real-time-api.p.rapidapi.com/deals"
-HEADERS = {
+# ---- CONFIG ----
+RAPIDAPI_URL = "https://amazon-real-time-api.p.rapidapi.com/deals"
+RAPIDAPI_HEADERS = {
     "x-rapidapi-host": "amazon-real-time-api.p.rapidapi.com",
-    "x-rapidapi-key": os.getenv("RAPIDAPI_KEY", "")
+    "x-rapidapi-key": os.getenv("RAPIDAPI_KEY")
 }
+RAPIDAPI_PARAMS = {"domain": "US", "node_id": "16310101"}
 
-DIST_DIR = "dist"
 TEMPLATE_DIR = "site_template"
+OUTPUT_DIR = "dist"
+NICHES_FILE = "niches.csv"
+GITHUB_USER = "SC-Connections"
+TOKEN = os.getenv("GITHUB_TOKEN")
 
-# Initialize template environment
-env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
-template = env.get_template("index.html")
-
-def fetch_amazon_data(niche, node_id="16310101"):
-    """Fetch product data from RapidAPI endpoint."""
-    url = f"{BASE_URL}?domain=US&node_id={node_id}"
+# ---- UTILS ----
+def fetch_amazon_data():
+    """Fetch product deals from the new RapidAPI endpoint."""
     try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        if not data or "data" not in data:
-            print(f"⚠️ No valid data returned for {niche}")
+        response = requests.get(RAPIDAPI_URL, headers=RAPIDAPI_HEADERS, params=RAPIDAPI_PARAMS)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("data", [])
+        else:
+            print(f"⚠️ API returned {response.status_code}: {response.text}")
             return []
-        return data["data"][:10]
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error fetching data for {niche}: {e}")
+    except Exception as e:
+        print(f"❌ Error fetching data: {e}")
         return []
 
 def generate_site(niche, products):
-    """Generate static HTML for each niche."""
-    niche_dir = os.path.join(DIST_DIR, niche)
+    """Render an HTML site from template."""
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    template = env.get_template("index.html")
+
+    niche_dir = os.path.join(OUTPUT_DIR, niche)
     os.makedirs(niche_dir, exist_ok=True)
-    html_output = template.render(
-        niche=niche.replace("-", " ").title(),
-        products=products
-    )
+
+    rendered = template.render(niche=niche, products=products)
     with open(os.path.join(niche_dir, "index.html"), "w", encoding="utf-8") as f:
-        f.write(html_output)
-    print(f"✅ Generated site for '{niche}' → {niche_dir}")
+        f.write(rendered)
+
+def create_or_update_repo(niche):
+    """Create or update a dedicated repo for the niche."""
+    repo_name = f"{niche}-site"
+    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{repo_name}"
+
+    headers = {
+        "Authorization": f"token {TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    # Create repo if it doesn’t exist
+    res = requests.get(api_url, headers=headers)
+    if res.status_code == 404:
+        print(f"🚀 Creating GitHub repo: {repo_name}")
+        create_res = requests.post(
+            f"https://api.github.com/user/repos",
+            headers=headers,
+            json={"name": repo_name, "auto_init": True, "private": False}
+        )
+        if create_res.status_code not in (200, 201):
+            print(f"❌ Failed to create repo: {create_res.text}")
+            return
+
+    # Push generated site
+    repo_dir = os.path.join(OUTPUT_DIR, niche)
+    subprocess.run(["git", "init"], cwd=repo_dir)
+    subprocess.run(["git", "checkout", "-b", "main"], cwd=repo_dir)
+    subprocess.run(["git", "config", "user.email", "github-actions@github.com"], cwd=repo_dir)
+    subprocess.run(["git", "config", "user.name", "GitHub Actions"], cwd=repo_dir)
+    subprocess.run(["git", "add", "."], cwd=repo_dir)
+    subprocess.run(["git", "commit", "-m", "Deploy site"], cwd=repo_dir)
+    subprocess.run(
+        [
+            "git", "push", "--force",
+            f"https://{GITHUB_USER}:{TOKEN}@github.com/{GITHUB_USER}/{repo_name}.git",
+            "main"
+        ],
+        cwd=repo_dir
+    )
+    print(f"✅ Deployed {niche} to https://github.com/{GITHUB_USER}/{repo_name}")
 
 def main():
     print("⚙️ Starting site generation process...")
-    os.makedirs(DIST_DIR, exist_ok=True)
 
-    with open("niches.csv", newline="", encoding="utf-8") as csvfile:
+    # Ensure dist exists
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Read niches.csv safely
+    with open(NICHES_FILE, newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
+        if "keyword" not in reader.fieldnames:
+            raise KeyError("CSV must have a 'keyword' column.")
         for row in reader:
             niche = row["keyword"].strip()
-            print(f"🔍 Fetching deals for '{niche}'...")
-            products = fetch_amazon_data(niche)
+            print(f"🔍 Fetching data for '{niche}'...")
+            products = fetch_amazon_data()
             generate_site(niche, products)
+            create_or_update_repo(niche)
 
-    print("🎉 All niche sites generated successfully!")
+    print("🎉 All niche sites generated and deployed!")
 
 if __name__ == "__main__":
     main()
