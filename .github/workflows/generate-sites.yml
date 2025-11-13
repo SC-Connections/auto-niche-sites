@@ -30,6 +30,12 @@ jobs:
           RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
           AMAZON_ASSOC_TAG: ${{ secrets.AMAZON_ASSOC_TAG }}
 
+      # 🆕 Step added here
+      - name: 🔧 Configure Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: 🚀 Deploy to GitHub Pages (gh-pages)
         uses: peaceiris/actions-gh-pages@v3
         with:
