@@ -1,0 +1,74 @@
+name: Generate and Deploy Top 10 Post
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: 'Post title (e.g., "Best Bluetooth Earbuds")'
+        required: true
+      slug:
+        description: 'URL slug (e.g., "bluetooth-earbuds")'
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  generate-post:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. checkout repo
+      - name: 🧹 Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. install tooling
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - name: 📦 Install dependencies
+        run: npm install -g mustache axios
+
+      # 3. pull live Amazon data via RapidAPI
+      - name: 🔍 Fetch Amazon data
+        env:
+          RAPID_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          KEYWORD: ${{ github.event.inputs.slug }}
+        run: node .github/scripts/fill-template.js
+
+      # 4. create Jekyll post
+      - name: 📝 Create Jekyll post
+        run: |
+          mv _data/filled.json _data/${{ github.event.inputs.slug }}.json
+          echo "---"                      >  _posts/$(date +%F)-${{ github.event.inputs.slug }}.md
+          echo "layout: top10"           >> _posts/$(date +%F)-${{ github.event.inputs.slug }}.md
+          echo "title: \"${{ github.event.inputs.title }}\"" >> _posts/$(date +%F)-${{ github.event.inputs.slug }}.md
+          echo "data_file: ${{ github.event.inputs.slug }}" >> _posts/$(date +%F)-${{ github.event.inputs.slug }}.md
+          echo "---"                     >> _posts/$(date +%F)-${{ github.event.inputs.slug }}.md
+
+      # 5. push back to SAME repo
+      - name: 🚀 Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "auto: new top10 – ${{ github.event.inputs.title }}"
+          
+      # 6. Deploy to GitHub Pages
+      - name: 🌐 Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: 🏗️ Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+          
+      - name: 📤 Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
