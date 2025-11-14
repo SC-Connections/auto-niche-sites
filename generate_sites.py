@@ -3,7 +3,6 @@ import csv
 import json
 import requests
 import shutil
-import subprocess
 from jinja2 import Environment, FileSystemLoader
 
 # ---- CONFIG ----
@@ -17,8 +16,6 @@ RAPIDAPI_PARAMS = {"domain": "US", "node_id": "16310101"}
 TEMPLATE_DIR = "site_template"
 OUTPUT_DIR = "dist"
 NICHES_FILE = "niches.csv"
-GITHUB_USER = "SC-Connections"
-TOKEN = os.getenv("GITHUB_TOKEN")
 
 # ---- UTILS ----
 def fetch_amazon_data():
@@ -35,6 +32,32 @@ def fetch_amazon_data():
         print(f"❌ Error fetching data: {e}")
         return []
 
+def get_placeholder_products():
+    """Generate placeholder product data."""
+    return [
+        {
+            "title": "Product 1",
+            "price": "$29.99",
+            "rating": 4.5,
+            "image": "https://via.placeholder.com/300x300?text=Product+1",
+            "url": "https://amazon.com"
+        },
+        {
+            "title": "Product 2",
+            "price": "$39.99",
+            "rating": 4.3,
+            "image": "https://via.placeholder.com/300x300?text=Product+2",
+            "url": "https://amazon.com"
+        },
+        {
+            "title": "Product 3",
+            "price": "$49.99",
+            "rating": 4.7,
+            "image": "https://via.placeholder.com/300x300?text=Product+3",
+            "url": "https://amazon.com"
+        }
+    ]
+
 def generate_site(niche, products):
     """Render an HTML site from template."""
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
@@ -46,47 +69,13 @@ def generate_site(niche, products):
     rendered = template.render(niche=niche, products=products)
     with open(os.path.join(niche_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(rendered)
-
-def create_or_update_repo(niche):
-    """Create or update a dedicated repo for the niche."""
-    repo_name = f"{niche}-site"
-    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{repo_name}"
-
-    headers = {
-        "Authorization": f"token {TOKEN}",
-        "Accept": "application/vnd.github+json"
-    }
-
-    # Create repo if it doesn’t exist
-    res = requests.get(api_url, headers=headers)
-    if res.status_code == 404:
-        print(f"🚀 Creating GitHub repo: {repo_name}")
-        create_res = requests.post(
-            f"https://api.github.com/user/repos",
-            headers=headers,
-            json={"name": repo_name, "auto_init": True, "private": False}
-        )
-        if create_res.status_code not in (200, 201):
-            print(f"❌ Failed to create repo: {create_res.text}")
-            return
-
-    # Push generated site
-    repo_dir = os.path.join(OUTPUT_DIR, niche)
-    subprocess.run(["git", "init"], cwd=repo_dir)
-    subprocess.run(["git", "checkout", "-b", "main"], cwd=repo_dir)
-    subprocess.run(["git", "config", "user.email", "github-actions@github.com"], cwd=repo_dir)
-    subprocess.run(["git", "config", "user.name", "GitHub Actions"], cwd=repo_dir)
-    subprocess.run(["git", "add", "."], cwd=repo_dir)
-    subprocess.run(["git", "commit", "-m", "Deploy site"], cwd=repo_dir)
-    subprocess.run(
-        [
-            "git", "push", "--force",
-            f"https://{GITHUB_USER}:{TOKEN}@github.com/{GITHUB_USER}/{repo_name}.git",
-            "main"
-        ],
-        cwd=repo_dir
-    )
-    print(f"✅ Deployed {niche} to https://github.com/{GITHUB_USER}/{repo_name}")
+    
+    # Copy static files
+    for static_file in ["style.css", "script.js"]:
+        src = os.path.join(TEMPLATE_DIR, static_file)
+        dst = os.path.join(niche_dir, static_file)
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
 
 def main():
     print("⚙️ Starting site generation process...")
@@ -103,10 +92,15 @@ def main():
             niche = row["keyword"].strip()
             print(f"🔍 Fetching data for '{niche}'...")
             products = fetch_amazon_data()
+            
+            if not products:
+                print(f"⚠️ No products found for '{niche}', generating with placeholder data...")
+                products = get_placeholder_products()
+            
             generate_site(niche, products)
-            create_or_update_repo(niche)
+            print(f"✅ Generated site for '{niche}' in {OUTPUT_DIR}/{niche}")
 
-    print("🎉 All niche sites generated and deployed!")
+    print("🎉 All niche sites generated successfully!")
 
 if __name__ == "__main__":
     main()
