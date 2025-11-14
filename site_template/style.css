@@ -1,15 +1,61 @@
 :root { --max: 1100px; --gap: 18px; --radius: 16px; }
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; background: #f8fafc; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #0f172a; background: #f8fafc; line-height: 1.6; }
 .wrap { max-width: var(--max); margin: 0 auto; padding: 20px; }
 header h1 { margin: 14px 0 6px; font-size: 32px; }
 .sub { color: #475569; margin: 0 0 18px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--gap); }
-.card { background: white; border-radius: var(--radius); padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.06); display: flex; flex-direction: column; }
-.card img { width: 100%; height: 180px; object-fit: contain; border-radius: 12px; background: #f1f5f9; }
-.card h3 { font-size: 18px; margin: 10px 0 6px; }
-.price { font-weight: 600; margin: 4px 0 10px; }
-.btn { display: inline-block; text-align: center; padding: 10px 12px; border-radius: 10px; text-decoration: none; font-weight: 600; border: 1px solid #1e293b; }
+
+/* Section Spacing */
+section { margin-bottom: 3rem; }
+section h2 { font-size: 28px; margin-bottom: 1.5rem; color: #1e293b; }
+section h3 { font-size: 20px; margin: 1.5rem 0 0.75rem; color: #334155; }
+section h4 { font-size: 16px; margin: 1rem 0 0.5rem; color: #475569; font-weight: 600; }
+
+/* Comparison Table */
+.table-wrap { overflow-x: auto; margin-bottom: 1rem; }
+.table-wrap table { width: 100%; border-collapse: collapse; background: white; border-radius: var(--radius); box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+.table-wrap td { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+.table-wrap tr:last-child td { border-bottom: none; }
+.table-wrap .rank { font-weight: 700; font-size: 18px; color: #1e293b; width: 50px; text-align: center; }
+.table-wrap td img { border-radius: 8px; display: block; }
+.table-wrap .cta-link { display: inline-block; padding: 8px 16px; background: #1e293b; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; }
+.table-wrap .cta-link:hover { background: #334155; }
+.tip { color: #475569; font-size: 14px; font-style: italic; margin-top: 1rem; }
+
+/* Grid Layout */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--gap); }
+
+/* Card Styles */
+.card { background: white; border-radius: var(--radius); padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 12px; }
+.card > a { display: block; text-align: center; }
+.card img { width: 100%; max-width: 120px; height: 120px; object-fit: contain; border-radius: 12px; background: #f1f5f9; margin: 0 auto; }
+.card h3 { font-size: 18px; margin: 0; }
+.card > div { display: flex; flex-direction: column; gap: 12px; flex-grow: 1; }
+.card p { margin: 0; color: #475569; font-size: 14px; }
+
+/* Pros/Cons */
+.pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.pc-box { background: #f8fafc; border-radius: 8px; padding: 12px; }
+.pc-box h4 { margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+.pc-box ul { margin: 0; padding-left: 20px; font-size: 13px; }
+.pc-box li { margin-bottom: 4px; color: #475569; }
+
+/* Buttons & Links */
+.btn { display: inline-block; text-align: center; padding: 10px 16px; border-radius: 10px; text-decoration: none; font-weight: 600; border: 1px solid #1e293b; color: #1e293b; margin-top: auto; }
 .btn:hover { background: #1e293b; color: white; }
-.badge { display: inline-block; background: #e2e8f0; border-radius: 999px; padding: 4px 8px; font-size: 12px; margin-right: 6px; }
-footer { color: #475569; font-size: 14px; }
+
+/* Badge */
+.badge { display: inline-block; background: #e2e8f0; border-radius: 999px; padding: 4px 10px; font-size: 12px; margin-right: 6px; font-weight: 500; }
+
+/* Price */
+.price { font-weight: 600; margin: 4px 0 10px; font-size: 18px; color: #16a34a; }
+
+/* FAQ Section */
+#faq h3 { font-size: 18px; color: #1e293b; margin-top: 1.5rem; }
+#faq p { color: #475569; margin: 0.5rem 0 1rem; }
+
+/* Trust Section */
+#trust { background: white; border-radius: var(--radius); padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+
+/* Footer */
+footer { color: #475569; font-size: 14px; margin-top: 3rem; text-align: center; }

@@ -3,19 +3,86 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ niche }} - Amazon Niche Products</title>
-  <meta name="description" content="Top {{ niche }} picks from Amazon" />
+  <title>{{ page.title | default(niche ~ " - Amazon Niche Products") }}</title>
+  <meta name="description" content="{{ page.description | default("Top " ~ niche ~ " picks from Amazon") }}" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="wrap">
-    <h1>Top {{ niche }} Products</h1>
-    <p class="sub">Curated picks with quick specs & links.</p>
+    <h1>{{ page.heading | default("Top " ~ niche ~ " Products") }}</h1>
+    <p class="sub">{{ page.subheading | default("Curated picks with quick specs & links.") }}</p>
   </header>
 
   <main class="wrap">
-    <section id="products" class="grid">
-      {{ products }}
+    {% if page.comparison %}
+    <section id="comparison">
+      <h2>{{ page.comparison.title }}</h2>
+      <div class="table-wrap">
+        <table aria-label="{{ page.comparison.title }}">
+          <tbody>
+            {% for item in page.comparison.rows %}
+            <tr>
+              <td class="rank">{{ item.rank }}</td>
+              <td><a href="#{{ item.id }}">{{ item.name }}</a></td>
+              <td>{{ item.pitch }}</td>
+              <td><img src="{{ item.img }}" alt="{{ item.name }}" loading="lazy" width="72" height="72"></td>
+              <td><a class="cta-link" href="{{ item.link }}" target="_blank" rel="nofollow sponsored noopener">{{ item.cta }}</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="tip">{{ page.comparison.tip }}</p>
+    </section>
+    {% endif %}
+
+    {% if page.reviews %}
+    <section id="reviews">
+      <h2>{{ page.reviews.title }}</h2>
+      <div class="grid">
+        {% for item in page.reviews.products %}
+        <article id="{{ item.id }}" class="card" aria-label="{{ item.name }} review">
+          <a href="{{ item.link }}" target="_blank" rel="nofollow sponsored noopener">
+            <img src="{{ item.img }}" alt="{{ item.name }}" loading="lazy" width="120" height="120">
+          </a>
+          <div>
+            <h3>{{ item.name }}</h3>
+            <span class="badge">{{ item.badge }}</span>
+            <p>{{ item.summary }}</p>
+            <div class="pros-cons">
+              <div class="pc-box">
+                <h4>Pros</h4>
+                <ul>{% for p in item.pros %}<li>{{ p }}</li>{% endfor %}</ul>
+              </div>
+              <div class="pc-box">
+                <h4>Cons</h4>
+                <ul>{% for c in item.cons %}<li>{{ c }}</li>{% endfor %}</ul>
+              </div>
+            </div>
+            <a class="btn" href="{{ item.link }}" target="_blank" rel="nofollow sponsored noopener">{{ item.cta }}</a>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section id="guide">
+      <h2>{{ page.guide.title | default("Buyer's Guide") }}</h2>
+      {{ page.guide.content | safe }}
+    </section>
+
+    <section id="faq">
+      <h2>FAQ</h2>
+      {% for q in page.faq %}
+      <h3>{{ q.q }}</h3>
+      <p>{{ q.a }}</p>
+      {% endfor %}
+    </section>
+
+    <section id="trust" style="margin-top:2rem">
+      <h2>Why Trust Our Picks?</h2>
+      <p>{{ page.trust }}</p>
     </section>
   </main>
 
