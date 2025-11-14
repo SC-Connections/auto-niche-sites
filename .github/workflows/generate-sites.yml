@@ -26,7 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests jinja2 pandas pyyaml
 
-      - name: ⚙️ Generate niche sites (one repo per niche)
+      - name: ⚙️ Generate niche sites
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
