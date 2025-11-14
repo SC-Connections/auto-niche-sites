@@ -1,0 +1,141 @@
+---
+layout: default
+---
+<article class="top10">
+  <header>
+    <h1>{{ page.title | default: "Top 10 Products" }}</h1>
+  </header>
+
+  <div class="products">
+    {% assign data = site.data[page.data_file] %}
+    {% if data.products %}
+      {% for product in data.products limit:10 %}
+      <div class="product-card">
+        <div class="product-image">
+          {% if product.image %}
+          <img src="{{ product.image }}" alt="{{ product.title }}" loading="lazy">
+          {% else %}
+          <div class="no-image">No image available</div>
+          {% endif %}
+        </div>
+        <div class="product-info">
+          <h2>{{ forloop.index }}. {{ product.title }}</h2>
+          {% if product.price %}
+          <p class="price">{{ product.price }}</p>
+          {% endif %}
+          {% if product.rating %}
+          <p class="rating">⭐ {{ product.rating }}</p>
+          {% endif %}
+          {% if product.description %}
+          <p class="description">{{ product.description }}</p>
+          {% endif %}
+          {% if product.link %}
+          <a href="{{ product.link }}" class="buy-button" target="_blank" rel="noopener">View on Amazon</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p>No products available yet. Run the workflow to fetch product data.</p>
+    {% endif %}
+  </div>
+</article>
+
+<style>
+.top10 {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.products {
+  display: grid;
+  gap: 20px;
+}
+
+.product-card {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+}
+
+.product-image {
+  flex-shrink: 0;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.product-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.no-image {
+  color: #999;
+  text-align: center;
+  padding: 20px;
+}
+
+.product-info {
+  flex: 1;
+}
+
+.product-info h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.2rem;
+}
+
+.price {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #B12704;
+  margin: 5px 0;
+}
+
+.rating {
+  color: #FFA41C;
+  margin: 5px 0;
+}
+
+.description {
+  color: #565959;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+
+.buy-button {
+  display: inline-block;
+  padding: 10px 20px;
+  background: #FF9900;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+.buy-button:hover {
+  background: #E88B00;
+}
+
+@media (max-width: 768px) {
+  .product-card {
+    flex-direction: column;
+  }
+  
+  .product-image {
+    width: 100%;
+    height: 250px;
+  }
+}
+</style>

@@ -24,7 +24,12 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests jinja2 pandas pyyaml
+          pip install requests
+
+      - name: 🔧 Configure Git identity
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "github-actions"
 
       - name: ⚙️ Generate niche sites (one repo per niche)
         env:
@@ -34,18 +39,7 @@ jobs:
           echo "⚙️ Starting site generation process..."
           python generate_sites.py
 
-      - name: 🔧 Configure Git identity
-        run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "github-actions"
-
       - name: ✅ Verify build output
         run: |
           echo "Listing dist folder:"
           ls -R dist || echo "No dist folder found."
-
-      - name: 🚀 Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
