@@ -29,10 +29,7 @@ jobs:
       - name: ⚙️ Generate niche sites (one repo per niche)
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "⚙️ Starting site generation process..."
-          python generate_sites.py
+        run: python generate_sites.py
 
       - name: 🔧 Configure Git identity
         run: |
