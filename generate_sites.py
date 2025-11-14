@@ -3,7 +3,6 @@ import csv
 import json
 import requests
 import shutil
-import subprocess
 from jinja2 import Environment, FileSystemLoader
 
 # ---- CONFIG ----
@@ -47,46 +46,22 @@ def generate_site(niche, products):
     with open(os.path.join(niche_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(rendered)
 
-def create_or_update_repo(niche):
-    """Create or update a dedicated repo for the niche."""
-    repo_name = f"{niche}-site"
-    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{repo_name}"
 
-    headers = {
-        "Authorization": f"token {TOKEN}",
-        "Accept": "application/vnd.github+json"
-    }
-
-    # Create repo if it doesn’t exist
-    res = requests.get(api_url, headers=headers)
-    if res.status_code == 404:
-        print(f"🚀 Creating GitHub repo: {repo_name}")
-        create_res = requests.post(
-            f"https://api.github.com/user/repos",
-            headers=headers,
-            json={"name": repo_name, "auto_init": True, "private": False}
-        )
-        if create_res.status_code not in (200, 201):
-            print(f"❌ Failed to create repo: {create_res.text}")
-            return
-
-    # Push generated site
-    repo_dir = os.path.join(OUTPUT_DIR, niche)
-    subprocess.run(["git", "init"], cwd=repo_dir)
-    subprocess.run(["git", "checkout", "-b", "main"], cwd=repo_dir)
-    subprocess.run(["git", "config", "user.email", "github-actions@github.com"], cwd=repo_dir)
-    subprocess.run(["git", "config", "user.name", "GitHub Actions"], cwd=repo_dir)
-    subprocess.run(["git", "add", "."], cwd=repo_dir)
-    subprocess.run(["git", "commit", "-m", "Deploy site"], cwd=repo_dir)
-    subprocess.run(
-        [
-            "git", "push", "--force",
-            f"https://{GITHUB_USER}:{TOKEN}@github.com/{GITHUB_USER}/{repo_name}.git",
-            "main"
-        ],
-        cwd=repo_dir
-    )
-    print(f"✅ Deployed {niche} to https://github.com/{GITHUB_USER}/{repo_name}")
+def copy_static_assets(niche):
+    """Copy static CSS and JS files to the niche directory."""
+    niche_dir = os.path.join(OUTPUT_DIR, niche)
+    
+    # Copy style.css
+    src_css = os.path.join(TEMPLATE_DIR, "style.css")
+    if os.path.exists(src_css):
+        shutil.copy(src_css, os.path.join(niche_dir, "style.css"))
+    
+    # Copy script.js
+    src_js = os.path.join(TEMPLATE_DIR, "script.js")
+    if os.path.exists(src_js):
+        shutil.copy(src_js, os.path.join(niche_dir, "script.js"))
+    
+    print(f"✅ Generated site for {niche}")
 
 def main():
     print("⚙️ Starting site generation process...")
@@ -104,7 +79,7 @@ def main():
             print(f"🔍 Fetching data for '{niche}'...")
             products = fetch_amazon_data()
             generate_site(niche, products)
-            create_or_update_repo(niche)
+            copy_static_assets(niche)
 
     print("🎉 All niche sites generated and deployed!")
 
