@@ -36,25 +36,25 @@ def get_placeholder_products():
     """Generate placeholder product data."""
     return [
         {
-            "title": "Product 1",
+            "title": "Sample Product 1",
             "price": "$29.99",
             "rating": 4.5,
-            "image": "https://via.placeholder.com/300x300?text=Product+1",
-            "url": "https://amazon.com"
+            "image": "https://via.placeholder.com/300x300?text=Sample+Product",
+            "url": "#"
         },
         {
-            "title": "Product 2",
+            "title": "Sample Product 2",
             "price": "$39.99",
             "rating": 4.3,
-            "image": "https://via.placeholder.com/300x300?text=Product+2",
-            "url": "https://amazon.com"
+            "image": "https://via.placeholder.com/300x300?text=Sample+Product",
+            "url": "#"
         },
         {
-            "title": "Product 3",
+            "title": "Sample Product 3",
             "price": "$49.99",
             "rating": 4.7,
-            "image": "https://via.placeholder.com/300x300?text=Product+3",
-            "url": "https://amazon.com"
+            "image": "https://via.placeholder.com/300x300?text=Sample+Product",
+            "url": "#"
         }
     ]
 
