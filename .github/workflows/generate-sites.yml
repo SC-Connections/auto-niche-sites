@@ -8,9 +8,21 @@ on:
       - "generate_sites.py"
       - ".github/workflows/generate-sites.yml"
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: 🧹 Checkout repository
@@ -43,10 +55,14 @@ jobs:
         run: |
           echo "Listing dist folder:"
           ls -R dist || echo "No dist folder found."
+          echo "Checking for .nojekyll file:"
+          ls -la dist/.nojekyll || echo ".nojekyll not found"
+
+      - name: 📦 Upload artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
 
       - name: 🚀 Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          enable_jekyll: false
+        id: deployment
+        uses: actions/deploy-pages@v4
