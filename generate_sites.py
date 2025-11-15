@@ -93,6 +93,12 @@ def main():
 
     # Ensure dist exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Create .nojekyll file to prevent GitHub Pages from using Jekyll
+    nojekyll_path = os.path.join(OUTPUT_DIR, ".nojekyll")
+    with open(nojekyll_path, "w") as f:
+        f.write("")
+    print("✓ Created .nojekyll file to skip Jekyll processing")
 
     # Read niches.csv safely
     with open(NICHES_FILE, newline="", encoding="utf-8") as csvfile:
